@@ -8,7 +8,8 @@ import numpy as np
 import tensorflow as tf
 from keras import Model, Input
 from keras.engine import Layer
-from keras.layers import concatenate, Bidirectional, LSTM, TimeDistributed, Dense, CuDNNLSTM, Dropout, CuDNNGRU, GRU
+from keras.layers import concatenate, Bidirectional, LSTM, TimeDistributed, Dense, CuDNNLSTM, Dropout, CuDNNGRU, GRU, \
+    SpatialDropout1D
 from keras.losses import sparse_categorical_crossentropy
 from keras.models import load_model
 from keras.optimizers import Nadam
@@ -101,7 +102,7 @@ class TaggingModel(object):
 
     def __cudnn_layer(self, input: any, idx: int, dropout: float, recurrent_dropout: float):
         layer = input
-        if dropout > 0.0: layer = Dropout(dropout)(layer)
+        if dropout > 0.0: layer = SpatialDropout1D(dropout)(layer)
         cell = CuDNNGRU if self.__use_gru else CuDNNLSTM
         size: int = self.__lstm_size[idx] if isinstance(self.__lstm_size, collections.Iterable) else self.__lstm_size
         return Bidirectional(cell(size, return_sequences=True), name=f'bilstm_wordrep_nr{idx+1}')(layer)

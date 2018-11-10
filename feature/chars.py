@@ -4,7 +4,8 @@ import numpy as np
 from keras import Input
 from keras.engine import Layer
 from keras.initializers import RandomUniform
-from keras.layers import TimeDistributed, Embedding, Dropout, Conv1D, MaxPooling1D, Flatten, Bidirectional, CuDNNLSTM
+from keras.layers import TimeDistributed, Embedding, Dropout, Conv1D, MaxPooling1D, Flatten, Bidirectional, CuDNNLSTM, \
+    SpatialDropout1D
 
 from dataset import DataSet
 from feature.base import Feature
@@ -56,7 +57,7 @@ class CharCNNFeature(CharsFeature):
         conv = TimeDistributed(conv, name=self.__name + '_conv1d')(embedding)
         conv = TimeDistributed(MaxPooling1D(52), name=self.__name + '_maxpool')(conv)
         output = TimeDistributed(Flatten(), name=self.__name + '_flatten')(conv)
-        output = Dropout(self.__dropout, name=self.__name + '_output_dropout')(output)
+        output = SpatialDropout1D(self.__dropout, name=self.__name + '_output_dropout')(output)
         return output
 
     def name(self) -> str:
@@ -81,9 +82,9 @@ class CharBiLSTMFeature(CharsFeature):
         size = len(self.alphabet())
         initializer = RandomUniform(minval=-0.5, maxval=0.5)
         embedding = TimeDistributed(Embedding(size, 50, embeddings_initializer=initializer))(input)
-        embedding = Dropout(self.__droput)(embedding)
+        embedding = SpatialDropout1D(self.__droput)(embedding)
         output = TimeDistributed(Bidirectional(CuDNNLSTM(100)))(embedding)
-        output = Dropout(self.__droput)(output)
+        output = SpatialDropout1D(self.__droput)(output)
         return output
 
     def name(self) -> str:
