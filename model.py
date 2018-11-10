@@ -157,7 +157,7 @@ class TaggingModel(object):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state["_NERModel__model"]
+        del state["_TaggingModel__model"]
         return state
 
     def __setstate__(self, state):
