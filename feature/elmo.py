@@ -8,22 +8,23 @@ from keras.layers import Lambda
 from bilm import Batcher
 from dataset import DataSet
 from feature.base import Feature
+from utils.files import ProjectPath
 
 
 class ELMoEmbeddingFeature(Feature):
 
-    def __init__(self, name: str, empedding_dir: str, padding: int=80):
+    def __init__(self, name: str, embedding_dir: ProjectPath, padding: int=80):
         self.__name = name
         self.__padding = padding
-        self.__embedding_dir = empedding_dir
-        self.__batcher = self.__create_batcher(empedding_dir)
+        self.__embedding_dir: ProjectPath = embedding_dir
+        self.__batcher = self.__create_batcher(embedding_dir)
 
     def input(self):
         return Input(shape=(None,50),dtype=np.int32,name=self.__name + '_elmo_embedding_input')
 
     def model(self, input: Any):
-        options_file: str = os.path.join(self.__embedding_dir, "options.json")
-        weight_file: str = os.path.join(self.__embedding_dir, "weights.hdf5")
+        options_file: str = self.__embedding_dir.join("options.json").get()
+        weight_file: str = self.__embedding_dir.join("weights.hdf5").get()
         def __lambda_layer(x):
             import tensorflow as tf
             from bilm import BidirectionalLanguageModel, weight_layers
@@ -35,8 +36,8 @@ class ELMoEmbeddingFeature(Feature):
                 return context_input['weighted_op']
         return Lambda(__lambda_layer, name=self.__name + '_elmo_lambda_layer')(input)
 
-    def __create_batcher(self, embedding_dir: str) -> Batcher:
-        vocab_path: str = os.path.join(embedding_dir, "vocabulary.txt")
+    def __create_batcher(self, embedding_dir: ProjectPath) -> Batcher:
+        vocab_path: str = embedding_dir.join("vocabulary.txt").get()
         return Batcher(vocab_path, 50)
 
     def name(self) -> str:

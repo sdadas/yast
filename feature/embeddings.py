@@ -9,11 +9,12 @@ from keras.engine import Layer
 
 from dataset import DataSet
 from feature.base import Feature
+from utils.files import ProjectPath
 
 
 class EmbeddingFeature(Feature):
 
-    def __init__(self, name: str, embedding_path: str, text_format: bool=False, to_lowercase: bool=True,
+    def __init__(self, name: str, embedding_path: ProjectPath, text_format: bool=False, to_lowercase: bool=True,
                  return_vectors: bool=False, trainable: bool=False):
         self.__embedding_path = embedding_path
         self.__text_format = text_format
@@ -33,7 +34,8 @@ class EmbeddingFeature(Feature):
         shape: Tuple = (None, self.__embedding.vector_size) if self.__return_vectors else (None,)
         return Input(shape=shape,dtype=dtype,name=self.__name + '_embedding_input')
 
-    def __load_embedding(self, path: str, text_format: bool=False) -> KeyedVectors:
+    def __load_embedding(self, embedding_path: ProjectPath, text_format: bool=False) -> KeyedVectors:
+        path: str = embedding_path.get()
         return KeyedVectors.load(path) if not text_format else KeyedVectors.load_word2vec_format(path, binary=False)
 
     def __vocab_index(self, word: str) -> int:
@@ -58,24 +60,18 @@ class EmbeddingFeature(Feature):
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        if not os.path.exists(self.__embedding_path):
-            embedding_path = os.environ.get("EMBEDDING_PATH", None)
-            if not embedding_path:
-                error = "deserialized path {} does not exist, consider overriding it by EMBEDDING_PATH env variable"
-                raise IOError(error.format(self.__embedding_path))
-            else: self.__embedding_path = embedding_path
         self.__embedding = self.__load_embedding(self.__embedding_path, self.__text_format)
 
 
 class CompressedEmbeddingFeature(Feature):
 
-    def __init__(self, name: str, vocab_path: str, embedding_path: str, to_lowercase: bool=True):
+    def __init__(self, name: str, vocab_path: ProjectPath, embedding_path: ProjectPath, to_lowercase: bool=True):
         self.__name: str = name
         self.vocab_path: str = vocab_path
         self.embedding_path: str = embedding_path
         self.to_lower: bool = to_lowercase
         self.vocab: Dict[str, int] = self.__load_vocab(vocab_path)
-        embedding = np.load(embedding_path)
+        embedding = np.load(embedding_path.get())
         self.codes: np.ndarray = embedding[embedding.files[0]]
         self.codebook: np.ndarray = embedding[embedding.files[1]]
         self.m = self.codes.shape[1]
@@ -88,9 +84,10 @@ class CompressedEmbeddingFeature(Feature):
     def input(self):
         return Input(shape=(None, self.dim),dtype=np.float32,name=self.__name + '_compressed_embedding_input')
 
-    def __load_vocab(self, vocab_path: str) -> Dict[str, int]:
-        open_func: Callable = gzip.open if vocab_path.endswith(".gz") else open
-        with open_func(vocab_path, "rt", encoding="utf-8") as input_file:
+    def __load_vocab(self, vocab_path: ProjectPath) -> Dict[str, int]:
+        path: str = vocab_path.get()
+        open_func: Callable = gzip.open if path.endswith(".gz") else open
+        with open_func(path, "rt", encoding="utf-8") as input_file:
             return {line.strip():idx for idx, line in enumerate(input_file)}
 
     def vocab_vector(self, word: str):
