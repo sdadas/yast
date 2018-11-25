@@ -14,6 +14,7 @@ from feature.chars import CharBiLSTMFeature, CharsFeature, CharCNNFeature
 from feature.elmo import ELMoEmbeddingFeature
 from feature.embeddings import EmbeddingFeature, CompressedEmbeddingFeature
 from model import TaggingModel, TaggingPrediction
+from utils.files import ProjectPath
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ DataPaths = namedtuple("DataPaths", ["meta_path", "train_path", "test_path", "va
 
 class AbstractRunner(ABC):
 
-    def __init__(self, base_path: str, config: Dict[str, any]=None, config_path: str=None):
+    def __init__(self, base_path: ProjectPath, config: Dict[str, any]=None, config_path: str=None):
         self.base_path = base_path
         if config is not None: self.config = config
         else: self.config = self.__create_config(config_path) if config_path else self.default_config()
@@ -35,9 +36,9 @@ class AbstractRunner(ABC):
     def __create_config(self, config_path: str) -> Dict[str, any]:
         with open(config_path, 'r', encoding='utf-8') as json_file: return json.load(json_file)
 
-    def __create_features(self, dataset: DataSet, base_path: str, paths: DataPaths):
+    def __create_features(self, dataset: DataSet, base_path: ProjectPath, paths: DataPaths):
         conf = self.get_subconfig("input")
-        embedding_path = os.path.join(base_path, conf.get("embedding_path"))
+        embedding_path = base_path.join(conf.get("embedding_path"))
         embedding_col = conf.get("embedding_col", "base")
         embedding_feature = conf.get("embedding_feature", "default")
         res = []
@@ -60,7 +61,7 @@ class AbstractRunner(ABC):
         else: raise NotImplementedError
         elmo_enabled: bool = conf.get("elmo.enabled", False)
         if elmo_enabled:
-            elmo = ELMoEmbeddingFeature("value", os.path.join(base_path, conf.get("elmo.dir_path")))
+            elmo = ELMoEmbeddingFeature("value", base_path.join(conf.get("elmo.dir_path")))
             res.append(elmo)
         feature_names = conf.get("features", [])
         for feature_name in feature_names:
@@ -103,7 +104,7 @@ class AbstractRunner(ABC):
     def after_run(self):
         output_dir = self.config.get("output.path")
         if not output_dir: return
-        output_path = os.path.join(self.base_path, output_dir)
+        output_path = self.base_path.join(output_dir).get()
         assert not os.path.exists(output_path) or os.path.isdir(output_path), "not a directory " + output_path
         if not os.path.exists(output_path): os.mkdir(output_path)
         self.__summarize_metrics()
@@ -153,12 +154,12 @@ class AbstractRunner(ABC):
     def get_subconfig(self, prefix: str) -> Dict[str, any]:
         return {key[len(prefix)+1:]:value for key, value in self.config.items() if key.startswith(prefix + '.')}
 
-    def create_feature(self, feature_name: str, dataset: DataSet, base_path: str, fold: DataPaths) -> Feature:
+    def create_feature(self, feature_name: str, dataset: DataSet, base_path: ProjectPath, fold: DataPaths) -> Feature:
         return OneHotFeature(feature_name, dataset.labels(feature_name), **self.get_subconfig("input.features"))
 
     @abstractmethod
     def default_config(self) -> Dict[str, any]: raise NotImplementedError
 
     @abstractmethod
-    def create_cross_validation_paths(self, base_path: str) -> List[DataPaths]: raise NotImplementedError
+    def create_cross_validation_paths(self, base_path: ProjectPath) -> List[DataPaths]: raise NotImplementedError
 

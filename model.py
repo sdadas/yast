@@ -20,6 +20,7 @@ from feature.base import OneHotFeature, Feature
 from feature.chars import CharsFeature, CharCNNFeature
 from feature.embeddings import EmbeddingFeature
 from metrics.conlleval import ConllevalOptions, EvalCounts, evaluate, get_metrics, report, ConllevalMetrics
+from utils.files import ProjectPath
 
 
 class TaggingPrediction(object):
@@ -203,4 +204,5 @@ class TaggingModelTest(unittest.TestCase):
                 vector = np.zeros(shape=(dim,)) if word == '<pad>' else np.random.uniform(-0.25, 0.25, size=dim)
                 arr = np.array2string(vector, formatter={'float_kind': lambda val: "%.6f" % val})
                 output_file.write(word + ' ' + arr.strip('[]').replace('\n', '') + '\n')
-        return EmbeddingFeature('words', output, text_format=True)
+        os.environ["TEST_PATH"] = "."
+        return EmbeddingFeature('words', ProjectPath("TEST_PATH", output), text_format=True)
