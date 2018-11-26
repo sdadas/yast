@@ -3,4 +3,5 @@ tensorflow-gpu=1.8.0
 Keras==2.2.4
 scipy>=1.0.1
 gensim>=3.1.0
+pexpect==4.2.1
 git+git://www.github.com/keras-team/keras-contrib@46fcdb9
