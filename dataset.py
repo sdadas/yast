@@ -16,10 +16,22 @@ class DataSetFeature(object):
 
 class DataSet(object):
 
-    def __init__(self, path: Optional[str], meta_path: str, padding: int=None):
-        self.data: List[List[Dict[str, str]]] = self._load_data(path) if path is not None else []
+    def __init__(self, data_path: Optional[str], meta_path: str, doc_data_path: Optional[str]=None, padding: int=None):
+        """
+        Creates new instance of DataSet and loads data.
+
+        :param data_path: path to file containing words and word features
+        :param doc_data_path: path to file containing sentence or document level features
+        :param meta_path: path to meta.json file, containing feature metadata
+        :param padding: padding length
+        """
+        self.data: List[List[Dict[str, str]]] = self._load_data(data_path) if data_path is not None else []
+        self.docdata: List[Dict[str, str]] = self._load_docdata(doc_data_path) if doc_data_path is not None else None
         self.meta: Dict[str, DataSetFeature] = self._load_meta(meta_path)
         self._padding = padding
+        if self.docdata is not None:
+            assert len(self.data) == len(self.docdata), \
+                f"document number mismatch, data({len(self.data)}) != docdata({len(self.docdata)})"
 
     def _load_data(self, path: str) -> List[List[Dict[str, str]]]:
         csv.register_dialect('space', delimiter=' ', quoting=csv.QUOTE_NONE)
@@ -40,6 +52,17 @@ class DataSet(object):
             if len(sentence) > 0: res.append(sentence)
             return res
 
+    def _load_docdata(self, path: str) -> List[Dict[str, str]]:
+        csv.register_dialect('space', delimiter=' ', quoting=csv.QUOTE_NONE)
+        with open(path, 'r', newline='', encoding='utf-8') as input_file:
+            reader = csv.reader(input_file, dialect='space')
+            self._doc_fieldnames = next(reader)
+            res: List[Dict[str, str]] = []
+            for row in reader:
+                row_dict = OrderedDict(zip(self._fieldnames, row))
+                res.append(row_dict)
+            return res
+
     def _load_meta(self, path: str) -> Dict[str, DataSetFeature]:
         with open(path, 'r', encoding='utf-8') as input_file:
             meta: Dict[str, List[str]] = json.load(input_file)
@@ -58,6 +81,9 @@ class DataSet(object):
         self.data = data
         self._maxlen = max([len(row) for row in data]) if data else 0
 
+    def set_docdata(self, docdata: List[Dict[str, str]]):
+        self.docdata = docdata
+
     def sentence_length(self) -> int:
         return self._maxlen if self._padding is None else self._padding
 
@@ -66,6 +92,9 @@ class DataSet(object):
 
     def values(self, feature: str) -> List[List[str]]:
         return [[row[feature] for row in sent] for sent in self.data]
+
+    def docvalues(self, feature: str) -> List[str]:
+        return [row[feature] for row in self.docdata]
 
     def column(self, feature: str) -> DataSetFeature:
         return self.meta[feature]

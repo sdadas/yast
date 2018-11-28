@@ -13,7 +13,7 @@ from feature.base import OneHotFeature, Feature
 from feature.chars import CharBiLSTMFeature, CharsFeature, CharCNNFeature
 from feature.elmo import ELMoEmbeddingFeature
 from feature.embeddings import EmbeddingFeature, CompressedEmbeddingFeature
-from model import TaggingModel, TaggingPrediction
+from model import TaggingModel, TaggingPrediction, ModelParams
 from utils.files import ProjectPath
 
 logging.basicConfig(level=logging.INFO)
@@ -84,7 +84,8 @@ class AbstractRunner(ABC):
         test: DataSet = DataSet(fold.test_path, fold.meta_path, padding=padding)
         valid: DataSet = DataSet(fold.valid_path, fold.meta_path, padding=padding) if fold.valid_path else None
         features: List[Feature] = self.__create_features(train, self.base_path, fold)
-        model = TaggingModel(features, train.column(self.config["input.target_col"]), **self.get_subconfig("model"))
+        model_params = ModelParams(**self.get_subconfig("model"))
+        model = TaggingModel(features, train.column(self.config["input.target_col"]), model_params)
         model.train(train, valid=valid, **self.get_subconfig("train"))
         pred: TaggingPrediction = model.test(test)
         self.after_fold(model, pred, fold)

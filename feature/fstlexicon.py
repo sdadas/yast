@@ -90,7 +90,7 @@ class FSTFeatureTest(unittest.TestCase):
         dir = os.path.dirname(os.path.realpath(__file__))
         fst_dir = os.path.join(dir, "..", "examples", "fst")
         meta_file = os.path.join(fst_dir, "meta.json")
-        dataset: DataSet = DataSet(path=None, meta_path=meta_file, padding=80)
+        dataset: DataSet = DataSet(data_path=None, meta_path=meta_file, padding=80)
         os.environ["FST_PATH"] = fst_dir
         feature: FSTFeature = FSTFeature("value", "food", dataset.labels("food"), ProjectPath("FST_PATH", "food.fst"))
         labels: Iterable[str] = feature.parse_sentence(["pizza", "kiełbasa", "miso", "gazpacho", "korma"], True)

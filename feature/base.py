@@ -54,7 +54,6 @@ class OneHotFeature(Feature):
         self.__alphabet = {val: idx for idx, val in enumerate(alphabet)}
         self.__size: int = len(self.__alphabet)
         self.__weights: np.ndarray = self.__init_weights(random_weights)
-        self.__random = random_weights
         self.__trainable = trainable
         self.__input3d: bool = input3d
 
@@ -92,6 +91,39 @@ class OneHotFeature(Feature):
                 sent.extend([pad_symbol]*extend)
             res.append(sent)
         return res
+
+    def name(self) -> str:
+        return self.__name
+
+
+class DocOneHotFeature(Feature):
+
+    def __init__(self, name: str, alphabet: List[str], trainable: bool=True, random_weights: bool=True):
+        self.__name = name
+        self.__alphabet = {val: idx for idx, val in enumerate(alphabet)}
+        self.__size: int = len(self.__alphabet)
+        self.__weights: np.ndarray = self.__init_weights(random_weights)
+        self.__trainable = trainable
+
+    def __init_weights(self, random_weights: bool=False) -> np.ndarray:
+        if random_weights: return np.random.uniform(-0.5, 0.5, size=(self.__size, self.__size))
+        else: return np.identity(self.__size, dtype='float32')
+
+    def model(self, input: Any) -> Layer:
+        w = [self.__weights]
+        size = self.__size
+        name = self.__name + '_embedding'
+        return Embedding(output_dim=size, input_dim=size, weights=w, trainable=self.__trainable, name=name)(input)
+
+    def input(self):
+        return Input(shape=(None,),dtype='int32',name=self.__name + '_onehot_input')
+
+    def transform(self, dataset: DataSet):
+        return np.array([self.__alphabet[row[self.name()]] for row in dataset.docdata])
+
+    def inverse_transform(self, array: np.ndarray) -> List[str]:
+        idx2symbol: Dict[int, str] = {idx: val for val, idx in self.__alphabet.items()}
+        return [idx2symbol[array[idx]] for idx in range(array.shape[0])]
 
     def name(self) -> str:
         return self.__name

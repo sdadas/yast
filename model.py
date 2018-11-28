@@ -19,8 +19,30 @@ from dataset import DataSet, DataSetFeature
 from feature.base import OneHotFeature, Feature
 from feature.chars import CharsFeature, CharCNNFeature
 from feature.embeddings import EmbeddingFeature
+from layers.attention import Attention
 from metrics.conlleval import ConllevalOptions, EvalCounts, evaluate, get_metrics, report, ConllevalMetrics
 from utils.files import ProjectPath
+
+class ModelParams(object):
+
+    def __init__(self, use_crf: bool=True, lstm_cudnn: bool=True, lstm_size: Union[int, List]=100, lstm_layers: int=3,
+                 lstm_dropout=(0.25, 0.25, 0.25), recurrent_dropout: float=0.0, use_gru: bool=False,
+                 opt_clipnorm: bool=False, otag: str='O', verbose: int = 1):
+        self.lstm_cudnn = lstm_cudnn
+        self.use_crf = use_crf
+        self.lstm_size = lstm_size
+        self.lstm_layers = lstm_layers
+        self.lstm_dropout: List[float] = self.__get_lstm_dropout(lstm_layers, lstm_dropout)
+        self.recurrent_dropout = recurrent_dropout
+        self.use_gru: float = use_gru
+        self.opt_clipnorm = opt_clipnorm
+        self.otag = otag
+        self.verbose = verbose
+
+    def __get_lstm_dropout(self, lstm_layers: int, lstm_dropout) -> List[float]:
+        if isinstance(lstm_dropout, tuple): return list(lstm_dropout)
+        elif isinstance(lstm_dropout, list): return lstm_dropout
+        else: return [lstm_dropout] * lstm_layers
 
 
 class TaggingPrediction(object):
@@ -61,74 +83,75 @@ class TaggingPrediction(object):
 
 class TaggingModel(object):
 
-    def __init__(self, features: Iterable[Feature], target_col: DataSetFeature, use_crf: bool=True,
-                 lstm_cudnn: bool=True, lstm_size: Union[int, List]=100, lstm_layers: int=3,
-                 lstm_dropout=(0.25, 0.25, 0.25), recurrent_dropout: float=0.0, use_gru: bool=False,
-                 opt_clipnorm: bool=False, otag: str='O', verbose: int = 1):
-        self.__labels: List[str] = target_col.alphabet
-        self.__target_name: str = target_col.name
-        self.__features: List[Feature] = list(features)
-        self.__lstm_cudnn = lstm_cudnn
-        self.__use_crf = use_crf
-        self.__lstm_size = lstm_size
-        self.__lstm_layers = lstm_layers
-        self.__lstm_dropout: List[float] = self.__get_lstm_dropout(lstm_layers, lstm_dropout)
-        self.__recurrent_dropout = recurrent_dropout
-        self.__use_gru: float = use_gru
-        self.__opt_clipnorm = opt_clipnorm
-        self.__otag = otag
+    def __init__(self, features: Iterable[Feature], target: DataSetFeature,
+                 doc_target: DataSetFeature=None, params: ModelParams=None):
+        if params is None: params = ModelParams()
+        self.labels: List[str] = target.alphabet
+        self.target_name: str = target.name
+        self.doc_labels: List[str] = doc_target.alphabet if doc_target else None
+        self.doc_target_name: str = doc_target.name if doc_target else None
+        self.features: List[Feature] = list(features)
+        self.params = params
         inputs = [feature.input() for feature in features]
         feature_models = [feature.model(inputs[idx]) for idx, feature in enumerate(features)]
-        self.__model: Model = self.__build(inputs, feature_models, verbose=verbose)
-        lstm_dropout_size: int = len(self.__lstm_dropout)
-        assert lstm_dropout_size >= (self.__lstm_layers), f"len(lstm_dropout) should be >= {lstm_dropout_size}"
-        assert not (lstm_cudnn and recurrent_dropout > 0.0), "recurrent_dropout is not supported in lstm_cudnn mode"
-
-    def __get_lstm_dropout(self, lstm_layers: int, lstm_dropout) -> List[float]:
-        if isinstance(lstm_dropout, tuple): return list(lstm_dropout)
-        elif isinstance(lstm_dropout, list): return lstm_dropout
-        else: return [lstm_dropout] * lstm_layers
+        self.model: Model = self.__build(inputs, feature_models, verbose=params.verbose)
+        lstm_dropout_size: int = len(self.params.lstm_dropout)
+        assert lstm_dropout_size >= (self.params.lstm_layers), f"len(lstm_dropout) should be >= {lstm_dropout_size}"
+        assert not (params.lstm_cudnn and params.recurrent_dropout > 0.0), "recurrent_dropout is not supported in lstm_cudnn mode"
 
     def __build(self, inputs: List[Input], feature_models: List[Model], verbose: int = 1) -> Model:
         hidden = concatenate(feature_models, name='concat_wordrep')
-        layer_func: Callable = self.__cudnn_layer if self.__lstm_cudnn else self.__noncudnn_layer
-        for idx in range(self.__lstm_layers):
+        layer_func: Callable = self.__cudnn_layer if self.params.lstm_cudnn else self.__noncudnn_layer
+        for idx in range(self.params.lstm_layers):
             dropout = 0.0
-            if idx < self.__lstm_layers and idx < len(self.__lstm_dropout) and self.__lstm_dropout[idx] > 0.0:
-                dropout = self.__lstm_dropout[idx]
-            hidden = layer_func(hidden, idx, dropout, self.__recurrent_dropout)
-        model = self.__output_crf(inputs, hidden) if self.__use_crf else self.__output_softmax(inputs, hidden)
+            if idx < self.params.lstm_layers and idx < len(self.params.lstm_dropout) and self.params.lstm_dropout[idx] > 0.0:
+                dropout = self.params.lstm_dropout[idx]
+            hidden = layer_func(hidden, idx, dropout, self.params.recurrent_dropout)
+        sequence_output = self.__sequence_output(hidden)
+        model = self.__compile_model(inputs, hidden, sequence_output)
         if verbose > 0: model.summary()
+        return model
+
+    def __compile_model(self, inputs: List[Input], lstm: Layer, sequence_output: Layer) -> Model:
+        outputs = [sequence_output]
+        loss = sparse_categorical_crossentropy if not self.params.use_crf else sequence_output.loss_function
+        if self.doc_target_name is not None:
+            doc_output = Attention()(lstm)
+            doc_output = Dropout(0.1)(doc_output)
+            doc_output = Dense(len(self.doc_labels), activation='softmax', name='doc_output')(doc_output)
+            outputs.append(doc_output)
+            loss = {'sequence_output': sparse_categorical_crossentropy, 'doc_output': sparse_categorical_crossentropy}
+        model = Model(inputs=inputs, outputs=outputs)
+        model.compile(loss=loss, optimizer=self.__optimizer())
         return model
 
     def __cudnn_layer(self, input: any, idx: int, dropout: float, recurrent_dropout: float):
         layer = input
         if dropout > 0.0: layer = SpatialDropout1D(dropout)(layer)
-        cell = CuDNNGRU if self.__use_gru else CuDNNLSTM
-        size: int = self.__lstm_size[idx] if isinstance(self.__lstm_size, collections.Iterable) else self.__lstm_size
+        cell = CuDNNGRU if self.params.use_gru else CuDNNLSTM
+        size: int = self.params.lstm_size[idx] if isinstance(self.params.lstm_size, collections.Iterable) else self.params.lstm_size
         return Bidirectional(cell(size, return_sequences=True), name=f'bilstm_wordrep_nr{idx+1}')(layer)
 
     def __noncudnn_layer(self, input: any, idx: int, dropout: float, recurrent_dropout: float):
-        cell = GRU if self.__use_gru else LSTM
-        size: int = self.__lstm_size[idx] if isinstance(self.__lstm_size, collections.Iterable) else self.__lstm_size
+        cell = GRU if self.params.use_gru else LSTM
+        size: int = self.params.lstm_size[idx] if isinstance(self.params.lstm_size, collections.Iterable) else self.params.lstm_size
         layer = cell(size, return_sequences=True, dropout=dropout, recurrent_dropout=recurrent_dropout)
         return Bidirectional(layer, name=f'bilstm_wordrep_nr{idx+1}')(input)
 
-    def __output_softmax(self, inputs: List[Input], input: Layer) -> Model:
-        output = TimeDistributed(Dense(len(self.__labels), activation='softmax'))(input)
-        model = Model(inputs=inputs, outputs=[output])
-        model.compile(loss=sparse_categorical_crossentropy, optimizer=self.__optimizer())
-        return model
-
-    def __output_crf(self, inputs: List[Input], input: Layer) -> Model:
-        crf = CRF(len(self.__labels), learn_mode='join', test_mode='viterbi', sparse_target=True, name='crf')
-        output = crf(input)
-        model = Model(inputs=inputs, outputs=[output])
-        model.compile(loss=crf.loss_function, optimizer=self.__optimizer())
-        return model
+    def __sequence_output(self, input: Layer) -> Layer:
+        layer_name = 'sequence_output'
+        if self.params.use_crf:
+            learn_mode = 'join' if self.doc_target_name is None else 'marginal'
+            test_mode = 'viterbi' if self.doc_target_name is None else 'marginal'
+            crf = CRF(len(self.labels), learn_mode=learn_mode, test_mode=test_mode, sparse_target=True, name=layer_name)
+            res = crf(input)
+            res.loss_function = crf.loss_function
+            return res
+        else:
+            return TimeDistributed(Dense(len(self.labels), activation='softmax'), name=layer_name)(input)
 
     def __optimizer(self):
-        return Nadam() if not self.__opt_clipnorm else Nadam(clipnorm=1.)
+        return Nadam() if not self.params.opt_clipnorm else Nadam(clipnorm=1.)
 
     def __run_opts(self):
         return tf.RunOptions(report_tensor_allocations_upon_oom=True)
@@ -136,30 +159,30 @@ class TaggingModel(object):
     def train(self, train: DataSet, valid: DataSet = None, epochs: int=50, batch_size: int=32, verbose: int=1):
         x, y = self.__transform_dataset(train)
         validation_data = self.__transform_dataset(valid) if valid is not None else None
-        self.__model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose)
+        self.model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose)
 
     def __transform_dataset(self, dataset: DataSet) -> Tuple[List[np.ndarray], List[np.ndarray]]:
-        target_feature = OneHotFeature(self.__target_name, dataset.labels(self.__target_name), input3d=True)
-        x: List[np.ndarray] = [feature.transform(dataset) for feature in self.__features]
+        target_feature = OneHotFeature(self.target_name, dataset.labels(self.target_name), input3d=True)
+        x: List[np.ndarray] = [feature.transform(dataset) for feature in self.features]
         y: List[np.ndarray] = target_feature.transform(dataset)
         return x, y
 
     def test(self, test: DataSet, verbose: int = 1) -> TaggingPrediction:
         words: List[List[str]] = test.values('value')
-        labels_true: List[List[str]] = test.values(self.__target_name)
+        labels_true: List[List[str]] = test.values(self.target_name)
         labels_pred: List[List[str]] = self.predict(test, string_labels=True, verbose=verbose)
-        return TaggingPrediction(words, labels_true, labels_pred, otag=self.__otag)
+        return TaggingPrediction(words, labels_true, labels_pred, otag=self.params.otag)
 
     def predict(self, test: DataSet, string_labels: bool=False, verbose: int = 1) -> Union[np.ndarray, List[List[str]]]:
-        x: List[np.ndarray] = [feature.transform(test) for feature in self.__features]
-        y_pred: np.ndarray = self.__model.predict(x, verbose=verbose)
+        x: List[np.ndarray] = [feature.transform(test) for feature in self.features]
+        y_pred: np.ndarray = self.model.predict(x, verbose=verbose)
         if not string_labels: return y_pred
-        target_feature = OneHotFeature(self.__target_name, test.labels(self.__target_name), input3d=True)
-        return target_feature.inverse_transform(y_pred, test, self.__otag)
+        target_feature = OneHotFeature(self.target_name, test.labels(self.target_name), input3d=True)
+        return target_feature.inverse_transform(y_pred, test, self.params.otag)
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        del state["_TaggingModel__model"]
+        del state["model"]
         return state
 
     def __setstate__(self, state):
@@ -170,14 +193,14 @@ class TaggingModel(object):
         if not os.path.exists(output_path): os.mkdir(output_path)
         TaggingModel.__check_isdir(output_path)
         with open(os.path.join(output_path, "model_meta.bin"), 'wb') as model_meta: pickle.dump(self, model_meta)
-        self.__model.save(os.path.join(output_path, "model_weights.bin"), overwrite=True, include_optimizer=False)
+        self.model.save(os.path.join(output_path, "model_weights.bin"), overwrite=True, include_optimizer=False)
 
     @staticmethod
     def load(input_path: str):
         TaggingModel.__check_isdir(input_path)
         with open(os.path.join(input_path, "model_meta.bin"), "rb") as model_meta:
             res: TaggingModel = pickle.load(model_meta)
-            res.__model = load_model(os.path.join(input_path, "model_weights.bin"), custom_objects={"CRF": CRF})
+            res.model = load_model(os.path.join(input_path, "model_weights.bin"), custom_objects={"CRF": CRF})
             return res
 
     @staticmethod
