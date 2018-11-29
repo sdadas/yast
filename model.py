@@ -16,12 +16,13 @@ from keras.optimizers import Nadam
 from keras_contrib.layers import CRF
 
 from dataset import DataSet, DataSetFeature
-from feature.base import OneHotFeature, Feature
+from feature.base import OneHotFeature, Feature, DocOneHotFeature
 from feature.chars import CharsFeature, CharCNNFeature
 from feature.embeddings import EmbeddingFeature
 from layers.attention import Attention
 from metrics.conlleval import ConllevalOptions, EvalCounts, evaluate, get_metrics, report, ConllevalMetrics
 from utils.files import ProjectPath
+
 
 class ModelParams(object):
 
@@ -81,6 +82,13 @@ class TaggingPrediction(object):
         return res
 
 
+class ClassificationPrediction(object):
+
+    def __init__(self, labels_true: List[str], labels_pred: List[str]):
+        self.labels_true = labels_true
+        self.labels_pred = labels_pred
+
+
 class TaggingModel(object):
 
     def __init__(self, features: Iterable[Feature], target: DataSetFeature,
@@ -116,7 +124,7 @@ class TaggingModel(object):
         outputs = [sequence_output]
         loss = sparse_categorical_crossentropy if not self.params.use_crf else sequence_output.loss_function
         if self.doc_target_name is not None:
-            doc_output = Attention()(lstm)
+            doc_output = Attention(bias=False)(lstm)
             doc_output = Dropout(0.1)(doc_output)
             doc_output = Dense(len(self.doc_labels), activation='softmax', name='doc_output')(doc_output)
             outputs.append(doc_output)
@@ -165,20 +173,41 @@ class TaggingModel(object):
         target_feature = OneHotFeature(self.target_name, dataset.labels(self.target_name), input3d=True)
         x: List[np.ndarray] = [feature.transform(dataset) for feature in self.features]
         y: List[np.ndarray] = target_feature.transform(dataset)
+        if self.doc_target_name is not None:
+            doc_target_feature = DocOneHotFeature(self.doc_target_name, dataset.labels(self.doc_target_name))
+            y = [y, doc_target_feature.transform(dataset)]
         return x, y
 
-    def test(self, test: DataSet, verbose: int = 1) -> TaggingPrediction:
+    def test(self, test: DataSet, verbose: int = 1) -> Union[TaggingPrediction, Tuple]:
+        preds: Union[tuple, List[List[str]]] = self.predict(test, string_labels=True, verbose=verbose)
+        if not isinstance(preds, tuple): return self.__tagging_predictions(test, preds)
+        else: return self.__tagging_predictions(test, preds[0]), self.__classification_predictions(test, preds[1])
+
+    def __tagging_predictions(self, test: DataSet, labels_pred: List[List[str]]) -> TaggingPrediction:
         words: List[List[str]] = test.values('value')
         labels_true: List[List[str]] = test.values(self.target_name)
-        labels_pred: List[List[str]] = self.predict(test, string_labels=True, verbose=verbose)
         return TaggingPrediction(words, labels_true, labels_pred, otag=self.params.otag)
 
-    def predict(self, test: DataSet, string_labels: bool=False, verbose: int = 1) -> Union[np.ndarray, List[List[str]]]:
+    def __classification_predictions(self, test: DataSet, labels_pred: List[str]) -> ClassificationPrediction:
+        labels_true: List[str] = test.docvalues(self.doc_target_name)
+        return ClassificationPrediction(labels_true, labels_pred)
+
+    def predict(self, test: DataSet, string_labels: bool=False, verbose: int = 1):
         x: List[np.ndarray] = [feature.transform(test) for feature in self.features]
-        y_pred: np.ndarray = self.model.predict(x, verbose=verbose)
+        y_pred: Union[np.ndarray, List[np.ndarray]] = self.model.predict(x, verbose=verbose)
         if not string_labels: return y_pred
+        if isinstance(y_pred, list): return self.__word_predictions(y_pred, test), self.__doc_predictions(y_pred, test)
+        else: self.__word_predictions(y_pred, test)
+
+    def __word_predictions(self, y_pred: Union[np.ndarray, List[np.ndarray]], test: DataSet):
+        predictions = y_pred[0] if isinstance(y_pred, list) else y_pred
         target_feature = OneHotFeature(self.target_name, test.labels(self.target_name), input3d=True)
-        return target_feature.inverse_transform(y_pred, test, self.params.otag)
+        return target_feature.inverse_transform(predictions, test, self.params.otag)
+
+    def __doc_predictions(self, y_pred: Union[np.ndarray, List[np.ndarray]], test: DataSet):
+        predictions = y_pred[1] if isinstance(y_pred, list) else y_pred
+        target_feature = DocOneHotFeature(self.doc_target_name, test.labels(self.doc_target_name))
+        return target_feature.inverse_transform(predictions)
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -199,8 +228,9 @@ class TaggingModel(object):
     def load(input_path: str):
         TaggingModel.__check_isdir(input_path)
         with open(os.path.join(input_path, "model_meta.bin"), "rb") as model_meta:
+            custom_objects = {"CRF": CRF, "Attention": Attention}
             res: TaggingModel = pickle.load(model_meta)
-            res.model = load_model(os.path.join(input_path, "model_weights.bin"), custom_objects={"CRF": CRF})
+            res.model = load_model(os.path.join(input_path, "model_weights.bin"), custom_objects=custom_objects)
             return res
 
     @staticmethod

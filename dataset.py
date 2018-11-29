@@ -59,7 +59,7 @@ class DataSet(object):
             self._doc_fieldnames = next(reader)
             res: List[Dict[str, str]] = []
             for row in reader:
-                row_dict = OrderedDict(zip(self._fieldnames, row))
+                row_dict = OrderedDict(zip(self._doc_fieldnames, row))
                 res.append(row_dict)
             return res
 

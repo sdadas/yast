@@ -123,7 +123,7 @@ class DocOneHotFeature(Feature):
 
     def inverse_transform(self, array: np.ndarray) -> List[str]:
         idx2symbol: Dict[int, str] = {idx: val for val, idx in self.__alphabet.items()}
-        return [idx2symbol[array[idx]] for idx in range(array.shape[0])]
+        return [idx2symbol[np.argmax(array[idx])] for idx in range(array.shape[0])]
 
     def name(self) -> str:
         return self.__name
