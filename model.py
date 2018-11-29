@@ -6,6 +6,7 @@ from typing import Iterable, Dict, List, Tuple, Union, Callable
 
 import numpy as np
 import tensorflow as tf
+from sklearn import metrics, preprocessing
 from keras import Model, Input
 from keras.engine import Layer
 from keras.layers import concatenate, Bidirectional, LSTM, TimeDistributed, Dense, CuDNNLSTM, Dropout, CuDNNGRU, GRU, \
@@ -88,6 +89,16 @@ class ClassificationPrediction(object):
         self.labels_true = labels_true
         self.labels_pred = labels_pred
 
+    def evaluate(self, verbose=True) -> Dict[str, float]:
+        encoder = preprocessing.LabelEncoder()
+        encoder.fit(self.labels_true + self.labels_pred)
+        y_true = encoder.transform(self.labels_true)
+        y_pred = encoder.transform(self.labels_pred)
+        acc = metrics.accuracy_score(y_true, y_pred) * 100.0
+        f1 = metrics.f1_score(y_true, y_pred) * 100.0
+        if verbose: print(f"classification - accuracy: {acc:.2f}%, f1: {f1:.2f}")
+        return {"accuracy": acc, "f1": f1}
+
 
 class TaggingModel(object):
 
@@ -137,12 +148,14 @@ class TaggingModel(object):
         layer = input
         if dropout > 0.0: layer = SpatialDropout1D(dropout)(layer)
         cell = CuDNNGRU if self.params.use_gru else CuDNNLSTM
-        size: int = self.params.lstm_size[idx] if isinstance(self.params.lstm_size, collections.Iterable) else self.params.lstm_size
+        size_list: bool = isinstance(self.params.lstm_size, collections.Iterable)
+        size: int = self.params.lstm_size[idx] if size_list else self.params.lstm_size
         return Bidirectional(cell(size, return_sequences=True), name=f'bilstm_wordrep_nr{idx+1}')(layer)
 
     def __noncudnn_layer(self, input: any, idx: int, dropout: float, recurrent_dropout: float):
         cell = GRU if self.params.use_gru else LSTM
-        size: int = self.params.lstm_size[idx] if isinstance(self.params.lstm_size, collections.Iterable) else self.params.lstm_size
+        size_list: bool = isinstance(self.params.lstm_size, collections.Iterable)
+        size: int = self.params.lstm_size[idx] if size_list else self.params.lstm_size
         layer = cell(size, return_sequences=True, dropout=dropout, recurrent_dropout=recurrent_dropout)
         return Bidirectional(layer, name=f'bilstm_wordrep_nr{idx+1}')(input)
 
