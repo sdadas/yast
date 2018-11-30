@@ -2,7 +2,8 @@ import collections
 import os
 import pickle
 import unittest
-from typing import Iterable, Dict, List, Tuple, Union, Callable
+from io import StringIO
+from typing import Iterable, Dict, List, Tuple, Union, Callable, TextIO
 
 import numpy as np
 import tensorflow as tf
@@ -96,8 +97,26 @@ class ClassificationPrediction(object):
         y_pred = encoder.transform(self.labels_pred)
         acc = metrics.accuracy_score(y_true, y_pred) * 100.0
         f1 = metrics.f1_score(y_true, y_pred) * 100.0
-        if verbose: print(f"classification - accuracy: {acc:.2f}%, f1: {f1:.2f}")
+        if verbose:
+            print(f"classification - accuracy: {acc:.2f}%, f1: {f1:.2f}")
+            print(self.__confusion_matrix(y_true, y_pred, encoder))
         return {"accuracy": acc, "f1": f1}
+
+    def __confusion_matrix(self, y_true, y_pred, encoder: preprocessing.LabelEncoder):
+        cm: List[List[float]] = metrics.confusion_matrix(y_true, y_pred)
+        label_length = max([len(clazz) for clazz in encoder.classes_]) + 5
+        output: StringIO = StringIO()
+        output.write(" "*label_length)
+        for idx in range(len(cm)): output.write("{:^8}".format(f"[{idx}]"))
+        output.write("\n")
+        for idx, row in enumerate(cm):
+            output.write(f"{encoder.classes_[idx]} [{idx}]".rjust(label_length))
+            for idx, col in enumerate(row):
+                output.write("{:^8}".format(col))
+            output.write("\n")
+        res = output.getvalue()
+        output.close()
+        return res
 
 
 class TaggingModel(object):
