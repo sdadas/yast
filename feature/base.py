@@ -51,8 +51,8 @@ class OneHotFeature(Feature):
 
     def __init__(self, name: str, alphabet: List[str], trainable: bool=True, random_weights: bool=True, input3d: bool = False):
         self.__name = name
-        self.__alphabet = {val: idx for idx, val in enumerate(alphabet)}
-        self.__size: int = len(self.__alphabet)
+        self.alphabet = {val: idx for idx, val in enumerate(alphabet)}
+        self.__size: int = len(self.alphabet)
         self.__weights: np.ndarray = self.__init_weights(random_weights)
         self.__trainable = trainable
         self.__input3d: bool = input3d
@@ -71,14 +71,14 @@ class OneHotFeature(Feature):
         return Input(shape=(None,),dtype='int32',name=self.__name + '_onehot_input')
 
     def transform(self, dataset: DataSet):
-        return self._transform_by_func(dataset, lambda val: self.__alphabet.get(val, 1), input3d=self.__input3d)
+        return self._transform_by_func(dataset, lambda val: self.alphabet.get(val, 1), input3d=self.__input3d)
 
     def transform_to_flat_array(self, dataset: DataSet, func: Callable[[str], Any] = None):
-        return self._transform_by_func_to_flat_array(dataset, func if func else lambda val: self.__alphabet.get(val, 1))
+        return self._transform_by_func_to_flat_array(dataset, func if func else lambda val: self.alphabet.get(val, 1))
 
     def inverse_transform(self, array: np.ndarray, dataset: DataSet, pad_symbol: str) -> List[List[str]]:
         res: List[List[str]] = []
-        idx2symbol: Dict[int, str] = {idx: val for val, idx in self.__alphabet.items()}
+        idx2symbol: Dict[int, str] = {idx: val for val, idx in self.alphabet.items()}
         for sent_idx in range(array.shape[0]):
             original_size = len(dataset.data[sent_idx])
             sent: List[str] = []
