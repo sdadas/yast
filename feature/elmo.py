@@ -6,6 +6,8 @@ from keras import Input
 from keras.layers import Lambda
 
 from bilm import Batcher
+from bilm.elmo import all_layers
+from bilm.elmo_keras import WeightElmo
 from dataset import DataSet
 from feature.base import Feature
 from utils.files import ProjectPath
@@ -31,9 +33,9 @@ class ELMoEmbeddingFeature(Feature):
             with tf.variable_scope('', reuse=tf.AUTO_REUSE):
                 bilm = BidirectionalLanguageModel(options_file, weight_file)
                 embedding_op = bilm(x_input)
-                context_input = weight_layers('input', embedding_op, l2_coef=0.0)
-                return context_input['weighted_op']
-        return Lambda(__lambda_layer, name=self.__name + '_elmo_lambda_layer')(input)
+                return all_layers(embedding_op)
+        embeddings = Lambda(__lambda_layer, name=self.__name + '_elmo_lambda_layer')(input)
+        return WeightElmo()(embeddings)
 
     def __create_batcher(self, embedding_dir: ProjectPath) -> Batcher:
         vocab_path: str = embedding_dir.join("vocabulary.txt").get()
