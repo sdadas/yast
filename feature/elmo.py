@@ -13,9 +13,8 @@ from utils.files import ProjectPath
 
 class ELMoEmbeddingFeature(Feature):
 
-    def __init__(self, name: str, embedding_dir: ProjectPath, padding: int=80):
+    def __init__(self, name: str, embedding_dir: ProjectPath):
         self.__name = name
-        self.__padding = padding
         self.__embedding_dir: ProjectPath = embedding_dir
         self.__batcher = self.__create_batcher(embedding_dir)
 
@@ -51,7 +50,7 @@ class ELMoEmbeddingFeature(Feature):
                 if word_idx >= dataset.sentence_length(): break
                 sent_text.append(word[self.__name])
             text.append(sent_text)
-        return self.__batcher.batch_sentences(text)
+        return self.__batcher.batch_sentences(text, padding=dataset.sentence_length())
 
     def __getstate__(self):
         state = self.__dict__.copy()
