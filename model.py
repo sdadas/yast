@@ -17,6 +17,7 @@ from keras.models import load_model
 from keras.optimizers import Nadam
 from keras_contrib.layers import CRF
 
+from bilm.elmo_keras import WeightElmo
 from dataset import DataSet, DataSetFeature
 from feature.base import OneHotFeature, Feature, DocOneHotFeature
 from feature.chars import CharsFeature, CharCNNFeature
@@ -260,7 +261,7 @@ class TaggingModel(object):
     def load(input_path: str):
         TaggingModel.__check_isdir(input_path)
         with open(os.path.join(input_path, "model_meta.bin"), "rb") as model_meta:
-            custom_objects = {"CRF": CRF, "Attention": Attention}
+            custom_objects = {"CRF": CRF, "Attention": Attention, "WeightElmo": WeightElmo}
             res: TaggingModel = pickle.load(model_meta)
             res.model = load_model(os.path.join(input_path, "model_weights.bin"), custom_objects=custom_objects)
             return res

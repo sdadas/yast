@@ -6,7 +6,6 @@ from keras import Input
 from keras.layers import Lambda
 
 from bilm import Batcher
-from bilm.elmo import all_layers
 from bilm.elmo_keras import WeightElmo
 from dataset import DataSet
 from feature.base import Feature
@@ -28,7 +27,7 @@ class ELMoEmbeddingFeature(Feature):
         weight_file: str = self.__embedding_dir.join("weights.hdf5").get()
         def __lambda_layer(x):
             import tensorflow as tf
-            from bilm import BidirectionalLanguageModel, weight_layers
+            from bilm import BidirectionalLanguageModel, all_layers
             x_input = tf.cast(x, tf.int32)
             with tf.variable_scope('', reuse=tf.AUTO_REUSE):
                 bilm = BidirectionalLanguageModel(options_file, weight_file)
