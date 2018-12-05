@@ -1,6 +1,7 @@
 import os
 import unittest
 
+
 class ProjectPath(object):
 
     def __init__(self, path_env: str, relative_path: str="."):
@@ -12,6 +13,13 @@ class ProjectPath(object):
 
     def get(self) -> str:
         return os.path.join(os.environ[self.__path_env], self.__relative_path).replace('\\', '/')
+
+    def to_dict(self):
+        return {"path_env": self.__path_env, "relative_path": self.__relative_path}
+
+    @staticmethod
+    def from_dict(object_dict):
+        return ProjectPath(object_dict["path_env"], object_dict["relative_path"])
 
 
 class ProjectPathTests(unittest.TestCase):

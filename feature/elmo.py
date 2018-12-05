@@ -23,12 +23,14 @@ class ELMoEmbeddingFeature(Feature):
         return Input(shape=(None,50),dtype=np.int32,name=self.__name + '_elmo_embedding_input')
 
     def model(self, input: Any):
-        options_file: str = self.__embedding_dir.join("options.json").get()
-        weight_file: str = self.__embedding_dir.join("weights.hdf5").get()
+        path_dict = self.__embedding_dir.to_dict()
         def __lambda_layer(x):
             import tensorflow as tf
             from bilm import BidirectionalLanguageModel, all_layers
             x_input = tf.cast(x, tf.int32)
+            input_dir = ProjectPath.from_dict(path_dict)
+            options_file: str = input_dir.join("options.json").get()
+            weight_file: str = input_dir.join("weights.hdf5").get()
             with tf.variable_scope('', reuse=tf.AUTO_REUSE):
                 bilm = BidirectionalLanguageModel(options_file, weight_file)
                 embedding_op = bilm(x_input)
