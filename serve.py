@@ -29,6 +29,8 @@ def create_app():
     parser.add_argument("--model-dir", type=str, required=True)
     parser.add_argument("--padding", type=int, default=80)
     parser.add_argument("--fieldnames", type=str, default="value")
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=5000)
     args = parser.parse_args()
     fieldnames = [fname.strip() for fname in args.fieldnames.split(sep=",")]
     server = PredictionHandler(args.model_dir, fieldnames, padding=args.padding)
@@ -40,9 +42,9 @@ def create_app():
         res = server.predict(sentences)
         return jsonify(res)
 
-    return app
+    return app, args
 
 
 if __name__ == '__main__':
-    app = create_app()
-    app.run(threaded=False)
+    app, args = create_app()
+    app.run(host=args.host, port=args.port, threaded=False)
