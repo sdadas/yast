@@ -1,6 +1,7 @@
 from keras import backend as K
 from keras.engine import Layer
 
+
 class WeightElmo(Layer):
 
     def __init__(self, **kwargs):
