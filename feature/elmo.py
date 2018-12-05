@@ -26,6 +26,7 @@ class ELMoEmbeddingFeature(Feature):
         path_dict = self.__embedding_dir.to_dict()
         def __lambda_layer(x):
             import tensorflow as tf
+            from utils.files import ProjectPath
             from bilm import BidirectionalLanguageModel, all_layers
             x_input = tf.cast(x, tf.int32)
             input_dir = ProjectPath.from_dict(path_dict)
