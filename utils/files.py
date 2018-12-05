@@ -8,10 +8,10 @@ class ProjectPath(object):
         self.__relative_path = relative_path
 
     def join(self, *paths):
-        return ProjectPath(self.__path_env, os.path.join(self.__relative_path, *paths))
+        return ProjectPath(self.__path_env, os.path.join(self.__relative_path, *paths).replace('\\', '/'))
 
     def get(self) -> str:
-        return os.path.join(os.environ[self.__path_env], self.__relative_path)
+        return os.path.join(os.environ[self.__path_env], self.__relative_path).replace('\\', '/')
 
 
 class ProjectPathTests(unittest.TestCase):
