@@ -10,11 +10,14 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * @author Sławomir Dadas
  */
-public class ParseSentence implements Command {
+public class ParseSentences implements Command {
+
+    private final static String SENTENCE_SEPARATOR = "==!END!==";
 
     @Override
     public boolean readable(String input) {
@@ -42,13 +45,19 @@ public class ParseSentence implements Command {
     private String findMatches(String base64, FSTSearch<Long> fst) {
         byte[] bytes = Base64.getDecoder().decode(base64);
         String decoded = new String(bytes, StandardCharsets.UTF_8);
-        String[] inputWords = StringUtils.split(decoded, "\n");
+        String[] sentences = StringUtils.split(decoded, SENTENCE_SEPARATOR);
+        String[] outputs = Arrays.stream(sentences).map(val -> findMatchesInSentence(val, fst)).toArray(String[]::new);
+        String output = StringUtils.join(outputs, SENTENCE_SEPARATOR);
+        return Base64.getEncoder().encodeToString(output.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String findMatchesInSentence(String sentence, FSTSearch<Long> fst) {
+        String[] inputWords = StringUtils.split(sentence, "\n");
         List<FSTMatch<Long>> matches = fst.find(inputWords);
         String[] outputWords = new String[inputWords.length];
         Arrays.fill(outputWords, "");
         matches.forEach(match -> applyMatch(match, outputWords));
-        String output = StringUtils.join(outputWords, '\n');
-        return Base64.getEncoder().encodeToString(output.getBytes(StandardCharsets.UTF_8));
+        return StringUtils.join(outputWords, '\n');
     }
 
     private void applyMatch(FSTMatch<Long> match, String[] output) {

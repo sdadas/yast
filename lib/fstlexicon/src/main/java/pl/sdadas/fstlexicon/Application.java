@@ -4,7 +4,7 @@ import org.apache.commons.lang3.StringEscapeUtils;
 import pl.sdadas.fstlexicon.command.Command;
 import pl.sdadas.fstlexicon.command.ListDictionaries;
 import pl.sdadas.fstlexicon.command.LoadDictionary;
-import pl.sdadas.fstlexicon.command.ParseSentence;
+import pl.sdadas.fstlexicon.command.ParseSentences;
 import pl.sdadas.fstlexicon.fst.FSTSearch;
 
 import java.io.BufferedReader;
@@ -45,7 +45,7 @@ public class Application {
 
     private static List<Command> createCommands() {
         List<Command> res = new ArrayList<>();
-        res.add(new ParseSentence());
+        res.add(new ParseSentences());
         res.add(new LoadDictionary());
         res.add(new ListDictionaries());
         return res;
