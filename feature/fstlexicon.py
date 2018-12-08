@@ -26,7 +26,7 @@ class FSTFeature(Feature):
     sentence_separator: str = "==!END!=="
 
     def __init__(self, input_name: str, lexicon_name: str, alphabet: List[str], fst_path: ProjectPath,
-                 trainable: bool=True, random_weights: bool=True, otag: str="other"):
+                 trainable: bool=True, random_weights: bool=True, otag: str="other", to_lower: bool=False):
         self.__input_name = input_name
         self.__lexicon_name = lexicon_name
         self.__path = fst_path
@@ -37,6 +37,7 @@ class FSTFeature(Feature):
         self.__random = random_weights
         self.__trainable = trainable
         self.__weights: np.ndarray = self.__init_weights(random_weights)
+        self.__to_lower = to_lower
         self.run_fstlexicon()
         self.load_fstlexicon()
 
@@ -54,13 +55,14 @@ class FSTFeature(Feature):
         return Embedding(output_dim=size, input_dim=size, weights=w, trainable=self.__trainable, name=name)(input)
 
     def transform(self, dataset: DataSet):
-        logger.info("Transforming %d rows with FST %s", len(dataset), self.__lexicon_name)
+        logger.info("Transforming %d rows with '%s' FST", len(dataset), self.__lexicon_name)
         shape = [len(dataset), dataset.sentence_length()]
         res: np.ndarray = np.zeros(shape, dtype='int32')
         batch: List[List[str]] = []
         sent_idx_start = 0
         for sent_idx, sent in enumerate(dataset.data):
             words: List[str] = [word[self.name()] for word in sent]
+            if self.__to_lower: words = [word.lower() for word in words]
             batch.append(words)
             if len(batch) >= self.batch_size or sent_idx >= (len(dataset) - 1):
                 self.__transform_batch(sent_idx_start, res, dataset, batch)
@@ -75,8 +77,8 @@ class FSTFeature(Feature):
             sent_indices: List[str] = indices[idx]
             for word_idx, label_idx in enumerate(sent_indices):
                 if word_idx >= dataset.sentence_length(): break
-                idx = int(label_idx) + 1 if label_idx else self.__otag_idx
-                res[sent_idx_start + idx, word_idx] = idx
+                output_idx = int(label_idx) + 1 if label_idx else self.__otag_idx
+                res[sent_idx_start + idx, word_idx] = output_idx
             idx += 1
 
     def parse_batch(self, batch: List[List[str]], return_labels=False) -> List[List[str]]:
