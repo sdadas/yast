@@ -31,7 +31,9 @@ def create_app():
     parser.add_argument("--fieldnames", type=str, default="value")
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--gpu", type=str, default="0")
     args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     fieldnames = [fname.strip() for fname in args.fieldnames.split(sep=",")]
     server = PredictionHandler(args.model_dir, fieldnames, padding=args.padding)
 
