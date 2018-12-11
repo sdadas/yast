@@ -36,7 +36,7 @@ def create_app():
     parser.add_argument("--model-dir", type=str, required=True)
     parser.add_argument("--padding", type=int, default=80)
     parser.add_argument("--fieldnames", type=str, default="value")
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--port", type=int, default=5000)
     parser.add_argument("--gpu", type=str, default="0")
     parser.add_argument("--language", type=str, default="pl")

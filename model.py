@@ -139,7 +139,7 @@ class TaggingModel(object):
         assert not (params.lstm_cudnn and params.recurrent_dropout > 0.0), "recurrent_dropout is not supported in lstm_cudnn mode"
 
     def __build(self, inputs: List[Input], feature_models: List[Model], verbose: int = 1) -> Model:
-        hidden = concatenate(feature_models, name='concat_wordrep')
+        hidden = concatenate(feature_models, name='concat_wordrep') if len(feature_models) > 1 else feature_models[0]
         layer_func: Callable = self.__cudnn_layer if self.params.lstm_cudnn else self.__noncudnn_layer
         for idx in range(self.params.lstm_layers):
             dropout = 0.0
