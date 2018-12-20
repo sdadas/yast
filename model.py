@@ -230,7 +230,7 @@ class TaggingModel(object):
         y_pred: Union[np.ndarray, List[np.ndarray]] = self.model.predict(x, verbose=verbose)
         if not string_labels: return y_pred
         if isinstance(y_pred, list): return self.__word_predictions(y_pred, test), self.__doc_predictions(y_pred, test)
-        else: self.__word_predictions(y_pred, test)
+        else: return self.__word_predictions(y_pred, test)
 
     def __word_predictions(self, y_pred: Union[np.ndarray, List[np.ndarray]], test: DataSet):
         predictions = y_pred[0] if isinstance(y_pred, list) else y_pred
