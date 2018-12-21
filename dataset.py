@@ -107,17 +107,19 @@ class DataSet(object):
             for word_idx, word in enumerate(sent):
                 word[name] = values[sent_idx][word_idx]
 
-    def write(self, output_path: str):
+    def write(self, output_path: str, include_fields: List[str]=None):
+        if include_fields: fieldnames: List[str] = [field for field in include_fields if field in self._fieldnames]
+        else: fieldnames = self._fieldnames
         with open(output_path, 'wt', encoding='utf-8') as output_file:
-            output_file.write(" ".join(self._fieldnames))
+            output_file.write(" ".join(fieldnames))
             output_file.write("\n")
             for sent in self.data:
                 for word in sent:
-                    self.__write_word(word, output_file)
+                    self.__write_word(word, output_file, fieldnames)
                 output_file.write("\n")
 
-    def __write_word(self, word: Dict[str, str], output_file: TextIO):
-        line = [word[fname] for fname in self._fieldnames]
+    def __write_word(self, word: Dict[str, str], output_file: TextIO, fieldnames: List[str]):
+        line = [word[fname] for fname in fieldnames]
         output_file.write(" ".join(line))
         output_file.write("\n")
 

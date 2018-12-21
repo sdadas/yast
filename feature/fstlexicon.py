@@ -2,7 +2,7 @@ import base64
 import logging
 import os
 import unittest
-from typing import List, Any, Iterable
+from typing import List, Any, Iterable, Dict
 
 import numpy as np
 from keras import Input
@@ -26,7 +26,8 @@ class FSTFeature(Feature):
     sentence_separator: str = "==!END!=="
 
     def __init__(self, input_name: str, lexicon_name: str, alphabet: List[str], fst_path: ProjectPath,
-                 trainable: bool=True, random_weights: bool=True, otag: str="other", to_lower: bool=False):
+                 trainable: bool=True, random_weights: bool=True, otag: str="other", to_lower: str="no"):
+        assert to_lower in ("first", "all", "no")
         self.__input_name = input_name
         self.__lexicon_name = lexicon_name
         self.__path = fst_path
@@ -37,7 +38,7 @@ class FSTFeature(Feature):
         self.__random = random_weights
         self.__trainable = trainable
         self.__weights: np.ndarray = self.__init_weights(random_weights)
-        self.__to_lower = to_lower
+        self.__to_lower: str = to_lower
         self.run_fstlexicon()
         self.load_fstlexicon()
 
@@ -55,14 +56,15 @@ class FSTFeature(Feature):
         return Embedding(output_dim=size, input_dim=size, weights=w, trainable=self.__trainable, name=name)(input)
 
     def transform(self, dataset: DataSet):
-        logger.info("Transforming %d rows with '%s' FST", len(dataset), self.__lexicon_name)
+        logger.info("Transforming %d sentences with '%s' FST", len(dataset), self.__lexicon_name)
         shape = [len(dataset), dataset.sentence_length()]
         res: np.ndarray = np.zeros(shape, dtype='int32')
         batch: List[List[str]] = []
         sent_idx_start = 0
         for sent_idx, sent in enumerate(dataset.data):
-            words: List[str] = [word[self.name()] for word in sent]
-            if self.__to_lower: words = [word.lower() for word in words]
+            words: List[str] = [word[self.__input_name] for word in sent]
+            if self.__to_lower == "all": words = [word.lower() for word in words]
+            elif self.__to_lower == "first": words[0] = words[0].lower()
             batch.append(words)
             if len(batch) >= self.batch_size or sent_idx >= (len(dataset) - 1):
                 self.__transform_batch(sent_idx_start, res, dataset, batch)
@@ -72,6 +74,7 @@ class FSTFeature(Feature):
 
     def __transform_batch(self, sent_idx_start: int, res: np.ndarray, dataset: DataSet, batch: List[List[str]]):
         indices: List[List[str]] = self.parse_batch(batch)
+        assert len(batch) == len(indices), f"{len(batch)} != {len(indices)} for batch ({sent_idx_start}+)"
         idx = 0
         while idx < len(indices):
             sent_indices: List[str] = indices[idx]
@@ -103,6 +106,9 @@ class FSTFeature(Feature):
 
     def indices2words(self, sentence: List[str]) -> List[str]:
         return [self.__alphabet[int(label_idx) + 1] if label_idx else self.__otag for label_idx in sentence]
+
+    def alphabet(self) -> Dict[int, str]:
+        return self.__alphabet
 
     def run_fstlexicon(self):
         if FSTFeature.lexicon is not None: return

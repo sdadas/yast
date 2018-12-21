@@ -45,7 +45,7 @@ public class ParseSentences implements Command {
     private String findMatches(String base64, FSTSearch<Long> fst) {
         byte[] bytes = Base64.getDecoder().decode(base64);
         String decoded = new String(bytes, StandardCharsets.UTF_8);
-        String[] sentences = StringUtils.split(decoded, SENTENCE_SEPARATOR);
+        String[] sentences = StringUtils.splitByWholeSeparator(decoded, SENTENCE_SEPARATOR);
         String[] outputs = Arrays.stream(sentences).map(val -> findMatchesInSentence(val, fst)).toArray(String[]::new);
         String output = StringUtils.join(outputs, SENTENCE_SEPARATOR);
         return Base64.getEncoder().encodeToString(output.getBytes(StandardCharsets.UTF_8));
