@@ -42,18 +42,22 @@ class CharsFeature(Feature):
 
 class CharCNNFeature(CharsFeature):
 
-    def __init__(self, name: str, alphabet: List[str], input_size: int=52, dropout: float=0.5):
+    def __init__(self, name: str, alphabet: List[str], input_size: int=52,
+                 embedding_size: int=30, filters: int=30, dropout: float=0.5):
         self.__name = name
         self.__input_size = input_size
         self.__alphabet = {val: idx for idx, val in enumerate(alphabet)}
         self.__dropout = dropout
+        self.__embedding_size = embedding_size
+        self.__filters = filters
 
     def model(self, input: Any) -> Layer:
         size = len(self.alphabet())
         initializer = RandomUniform(minval=-0.5, maxval=0.5)
-        embedding = TimeDistributed(Embedding(size, 30, embeddings_initializer=initializer),  name=self.__name)(input)
+        embedding_step = Embedding(size, self.__embedding_size, embeddings_initializer=initializer)
+        embedding = TimeDistributed(embedding_step,  name=self.__name)(input)
         embedding = Dropout(self.__dropout, name=self.__name + '_inner_dropout')(embedding)
-        conv = Conv1D(kernel_size=3, filters=30, padding='same', activation='tanh', strides=1)
+        conv = Conv1D(kernel_size=3, filters=self.__filters, padding='same', activation='tanh', strides=1)
         conv = TimeDistributed(conv, name=self.__name + '_conv1d')(embedding)
         conv = TimeDistributed(MaxPooling1D(52), name=self.__name + '_maxpool')(conv)
         output = TimeDistributed(Flatten(), name=self.__name + '_flatten')(conv)

@@ -14,20 +14,23 @@ from utils.files import ProjectPath
 
 class ELMoEmbeddingFeature(Feature):
 
-    def __init__(self, name: str, embedding_dir: ProjectPath):
+    def __init__(self, name: str, embedding_dir: ProjectPath, mode: str="weighted"):
+        assert mode in ("top", "mean", "weighted")
         self.__name = name
         self.__embedding_dir: ProjectPath = embedding_dir
         self.__batcher = self.__create_batcher(embedding_dir)
+        self.__mode = mode
 
     def input(self):
         return Input(shape=(None,50),dtype=np.int32,name=self.__name + '_elmo_embedding_input')
 
     def model(self, input: Any):
         path_dict = self.__embedding_dir.to_dict()
+        mode = self.__mode
         def __lambda_layer(x):
             import tensorflow as tf
             from utils.files import ProjectPath
-            from bilm import BidirectionalLanguageModel, all_layers
+            from bilm import BidirectionalLanguageModel, all_layers, weight_layers
             x_input = tf.cast(x, tf.int32)
             input_dir = ProjectPath.from_dict(path_dict)
             options_file: str = input_dir.join("options.json").get()
@@ -35,9 +38,13 @@ class ELMoEmbeddingFeature(Feature):
             with tf.variable_scope('', reuse=tf.AUTO_REUSE):
                 bilm = BidirectionalLanguageModel(options_file, weight_file)
                 embedding_op = bilm(x_input)
-                return all_layers(embedding_op)
+                if mode == "weighted":
+                    return all_layers(embedding_op)
+                else:
+                    context_input = weight_layers('input', embedding_op, l2_coef=0.0, use_top_only=(mode=="top"))
+                    return context_input['weighted_op']
         embeddings = Lambda(__lambda_layer, name=self.__name + '_elmo_lambda_layer')(input)
-        return WeightElmo()(embeddings)
+        return embeddings if not mode == "weighted" else WeightElmo()(embeddings)
 
     def __create_batcher(self, embedding_dir: ProjectPath) -> Batcher:
         vocab_path: str = embedding_dir.join("vocabulary.txt").get()
