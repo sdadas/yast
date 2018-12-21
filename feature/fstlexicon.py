@@ -118,6 +118,11 @@ class FSTFeature(Feature):
     def name(self) -> str:
         return self.__lexicon_name
 
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.run_fstlexicon()
+        self.load_fstlexicon()
+
 
 class FSTFeatureTest(unittest.TestCase):
 
