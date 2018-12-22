@@ -50,6 +50,15 @@ class Feature(ABC):
 class OneHotFeature(Feature):
 
     def __init__(self, name: str, alphabet: List[str], trainable: bool=True, random_weights: bool=True, input3d: bool = False):
+        """
+        Feature representing fixed vocabulary column loaded from the data set.
+
+        :param name: name of the input column in the data set (also, a name of this feature in the model)
+        :param alphabet: a list of labels for the column
+        :param trainable: whether embedding layer for this feature should be trained
+        :param random_weights: initialize embedding layer with random vectors, one-hot encoding is used otherwise
+        :param input3d: transform data to 3d shape (sentences, words, 1), if False the default shape is (sentences, words)
+        """
         self.__name = name
         self.alphabet = {val: idx for idx, val in enumerate(alphabet)}
         self.__size: int = len(self.alphabet)
@@ -99,6 +108,14 @@ class OneHotFeature(Feature):
 class DocOneHotFeature(Feature):
 
     def __init__(self, name: str, alphabet: List[str], trainable: bool=True, random_weights: bool=True):
+        """
+        Feature representing sentence level fixed vocabulary column.
+
+        :param name: name of the input column in the data set (also, a name of this feature in the model)
+        :param alphabet: a list of labels for the column
+        :param trainable: whether embedding layer for this feature should be trained
+        :param random_weights: initialize embedding layer with random vectors, one-hot encoding is used otherwise
+        """
         self.__name = name
         self.__alphabet = {val: idx for idx, val in enumerate(alphabet)}
         self.__size: int = len(self.__alphabet)

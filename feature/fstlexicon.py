@@ -27,6 +27,20 @@ class FSTFeature(Feature):
 
     def __init__(self, input_name: str, lexicon_name: str, alphabet: List[str], fst_path: ProjectPath,
                  trainable: bool=True, random_weights: bool=True, otag: str="other", to_lower: str="no"):
+        """
+        Creates new instance of FSTFeature. Runs java fstlexicon.jar application if not already running.
+        Loads new lexicon into fstlexicon.jar.
+
+        :param input_name: name of the input column in the data set
+        :param lexicon_name: name of the generated output feature
+        :param alphabet: list of labels in the dictionary in the order according to the indices encoded in the FST
+        :param fst_path: path to lucene FST file
+        :param trainable: whether embedding layer for this feature should be trained
+        :param random_weights: initialize embedding layer with random vectors, one-hot encoding is used otherwise
+        :param otag: name of the other / unknown label in the dictionary, the label should be present in the alphabet
+        :param to_lower: transform input sentences: "no" - original casing is preserved,
+               "all" - all words are lowercased, "first" - only the first word in the sentence is lowercased
+        """
         assert to_lower in ("first", "all", "no")
         self.__input_name = input_name
         self.__lexicon_name = lexicon_name
