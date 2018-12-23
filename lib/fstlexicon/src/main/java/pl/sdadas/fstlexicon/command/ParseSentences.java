@@ -39,7 +39,8 @@ public class ParseSentences implements Command {
             throw new IllegalStateException(msg);
         }
         String output = findMatches(args[2], fst);
-        System.out.println(StringEscapeUtils.escapeJava(output));
+        System.out.print(StringEscapeUtils.escapeJava(output));
+        System.out.print("\r\n");
     }
 
     private String findMatches(String base64, FSTSearch<Long> fst) {
