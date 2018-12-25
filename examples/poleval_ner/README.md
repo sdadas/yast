@@ -32,9 +32,9 @@ poleval_ner_test.py -g POLEVAL-NER_GOLD.json -u data/results.json
 
 Models trained for 10 epochs should reach a final score of about 90. Evaluation results for the pre-trained models compared to the three best submissions from the PolEval competition are shown in the table below. 
 
-| Model              | Final score | Exact score | Overlap score |
-|--------------------|:-----------:|:-----------:|:-------------:|
-| Liner2             |     81.0    |     77.8    |      81.8     |
-| PolDeepNer         |     85.1    |     82.2    |      85.9     |
-| Per group LSTM-CRF |     86.6    |     82.6    |      87.7     |
-| This code (yast)   |     90.3    |     87.0    |      91.1       |
+| Model               | Final score | Exact score | Overlap score |
+|---------------------|:-----------:|:-----------:|:-------------:|
+| Liner2              |     81.0    |     77.8    |      81.8     |
+| PolDeepNer          |     85.1    |     82.2    |      85.9     |
+| Per group LSTM-CRF  |     86.6    |     82.6    |      87.7     |
+| **This code (yast)**|   **90.3**  |   **87.0**  |    **91.1**   |
