@@ -31,7 +31,7 @@ class ModelParams(object):
 
     def __init__(self, use_crf: bool=True, lstm_cudnn: bool=True, lstm_size: Union[int, List]=100, lstm_layers: int=3,
                  lstm_dropout=(0.25, 0.25, 0.25), recurrent_dropout: float=0.0, use_gru: bool=False,
-                 opt_clipnorm: bool=False, otag: str='O', verbose: int = 1):
+                 opt_clipnorm: bool=False, learning_rate: float=0.002, otag: str='O', verbose: int = 1):
         self.lstm_cudnn = lstm_cudnn
         self.use_crf = use_crf
         self.lstm_size = lstm_size
@@ -42,6 +42,7 @@ class ModelParams(object):
         self.opt_clipnorm = opt_clipnorm
         self.otag = otag
         self.verbose = verbose
+        self.learning_rate = learning_rate
 
     def __get_lstm_dropout(self, lstm_layers: int, lstm_dropout) -> List[float]:
         if isinstance(lstm_dropout, tuple): return list(lstm_dropout)
@@ -97,7 +98,7 @@ class ClassificationPrediction(object):
         y_true = encoder.transform(self.labels_true)
         y_pred = encoder.transform(self.labels_pred)
         acc = metrics.accuracy_score(y_true, y_pred) * 100.0
-        f1 = metrics.f1_score(y_true, y_pred) * 100.0
+        f1 = metrics.f1_score(y_true, y_pred, average="weighted") * 100.0
         if verbose:
             print(f"classification - accuracy: {acc:.2f}%, f1: {f1:.2f}")
             print(self.__confusion_matrix(y_true, y_pred, encoder))
@@ -192,7 +193,8 @@ class TaggingModel(object):
             return TimeDistributed(Dense(len(self.labels), activation='softmax'), name=layer_name)(input)
 
     def __optimizer(self):
-        return Nadam() if not self.params.opt_clipnorm else Nadam(clipnorm=1.)
+        lr = self.params.learning_rate
+        return Nadam(lr=lr) if not self.params.opt_clipnorm else Nadam(clipnorm=1., lr=lr)
 
     def __run_opts(self):
         return tf.RunOptions(report_tensor_allocations_upon_oom=True)
