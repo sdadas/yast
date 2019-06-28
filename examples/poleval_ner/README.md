@@ -4,7 +4,7 @@ This example is an implementation of the method from our article "Combining neur
 
 #### 1. Downloading the data
 
-Download and extract [the data needed to run this example](https://hkbaom-my.sharepoint.com/:u:/g/personal/pro12151_my365_site/EeN-fn7HhUlDvI3HuKtJMbwB8iuvppyrDmezJZzhoKp1tg?e=ZTJnth). The archive contains pre-trained ELMo embeddings for Polish, five lexicons in Lucene FST format, pre-trained models, preprocessed training (NKJP) and evaluation (PolEval) data sets.
+Download and extract [the data needed to run this example](https://drive.google.com/open?id=1o-OfSWf-qOhfZWf-vUIp-7ZFw2bSzRb3). The archive contains pre-trained ELMo embeddings for Polish, five lexicons in Lucene FST format, pre-trained models, preprocessed training (NKJP) and evaluation (PolEval) data sets.
 In the case of NKJP data set, preprocessing included running Wikipedia Miner entity linking algorithm on the data. For PolEval, the data has been tokenized, lemmatized and then processed in Wikipedia Miner.
 Results of entity linking are stored in `wikipedia` column in both data sets. 
 
