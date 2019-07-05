@@ -7,6 +7,7 @@ from typing import Iterable, Dict, List, Tuple, Union, Callable, TextIO
 
 import numpy as np
 import tensorflow as tf
+from keras.callbacks import ReduceLROnPlateau, EarlyStopping
 from sklearn import metrics, preprocessing
 from keras import Model, Input
 from keras.engine import Layer
@@ -199,10 +200,17 @@ class TaggingModel(object):
     def __run_opts(self):
         return tf.RunOptions(report_tensor_allocations_upon_oom=True)
 
-    def train(self, train: DataSet, valid: DataSet = None, epochs: int=50, batch_size: int=32, verbose: int=1):
+    def train(self, train: DataSet, valid: DataSet = None, epochs: int=50, batch_size: int=32, verbose: int=1, reducelr: bool=False):
         x, y = self.__transform_dataset(train)
-        validation_data = self.__transform_dataset(valid) if valid is not None else None
-        self.model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose)
+        val_data = None
+        callbacks = []
+        if valid is not None:
+            val_data = self.__transform_dataset(valid)
+            if reducelr:
+                rlr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, verbose=verbose, min_lr=0.0002)
+                stop = EarlyStopping(monitor='val_loss', min_delta=0, patience=6, verbose=0, restore_best_weights=True)
+                callbacks.extend([rlr, stop])
+        self.model.fit(x=x, y=y, validation_data=val_data, batch_size=batch_size, epochs=epochs, verbose=verbose, callbacks=callbacks)
 
     def __transform_dataset(self, dataset: DataSet) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         target_feature = OneHotFeature(self.target_name, dataset.labels(self.target_name), input3d=True)
