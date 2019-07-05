@@ -1,7 +1,10 @@
 import copy
 from collections import OrderedDict
-from typing import List, Dict, Optional, TextIO
+from typing import List, Dict, Optional, TextIO, Tuple
 import csv, json
+
+import math
+
 
 class DataSetFeature(object):
 
@@ -122,6 +125,16 @@ class DataSet(object):
         line = [word[fname] for fname in fieldnames]
         output_file.write(" ".join(line))
         output_file.write("\n")
+
+    def train_test_split(self, train_fraction: float) -> Tuple["DataSet", "DataSet"]:
+        split_idx: int = math.floor(len(self.data) * train_fraction)
+        train = self.copy()
+        train.data = train.data[:split_idx]
+        if train.docdata: train.docdata = train.docdata[:split_idx]
+        test = self.copy()
+        test.data = test.data[split_idx:]
+        if train.docdata: test.docdata = test.docdata[split_idx:]
+        return train, test
 
     @staticmethod
     def empty(meta_path: str, fieldnames: List[str], padding: int):

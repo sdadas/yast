@@ -8,7 +8,7 @@ from feature.casing import CasingFeature
 from feature.chars import CharsFeature, CharCNNFeature
 from feature.elmo import ELMoEmbeddingFeature
 from feature.fstlexicon import FSTFeature
-from model import TaggingModel, TaggingPrediction
+from model import TaggingModel, TaggingPrediction, ModelParams
 from utils.files import ProjectPath
 
 
@@ -49,9 +49,11 @@ if __name__ == '__main__':
     path: ProjectPath = ProjectPath("NER_PATH")
     meta_path = path.join("meta.json").get()
     train: DataSet = DataSet(path.join("nkjp.txt").get(), meta_path, padding=80)
+    train, valid = train.train_test_split(0.9)
     features: List[Feature] = create_features(train, path, args)
-    model = TaggingModel(features, train.column("subtype" if args.submodel else "type"))
-    model.train(train, epochs=10)
+    params: ModelParams = ModelParams(learning_rate=0.1)
+    model = TaggingModel(features, train.column("subtype" if args.submodel else "type"), params=params)
+    model.train(train, valid=valid, reducelr=True, epochs=50)
     TaggingModel.save(model, path.join("submodel" if args.submodel else "model").get())
     pred: TaggingPrediction = model.test(train)
     pred.evaluate(ignore_tagging_scheme=args.submodel)
