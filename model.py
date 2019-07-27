@@ -4,7 +4,7 @@ import os
 import pickle
 import unittest
 from io import StringIO
-from typing import Iterable, Dict, List, Tuple, Union, Callable, TextIO
+from typing import Iterable, Dict, List, Tuple, Union, Callable
 
 import numpy as np
 import tensorflow as tf
@@ -20,6 +20,7 @@ from keras.optimizers import Nadam
 from keras_contrib.layers import CRF
 
 from bilm.elmo_keras import WeightElmo
+from callback.restore_weights import RestoreWeights
 from callback.sgdr import SGDRScheduler
 from dataset import DataSet, DataSetFeature
 from feature.base import OneHotFeature, Feature, DocOneHotFeature
@@ -48,9 +49,11 @@ class ModelParams(object):
         self.otag = otag
         self.verbose = verbose
         self.learning_rate = learning_rate
+        self.optimizer = Nadam
         self._scheduler = None
         self._scheduler_needs_validation = False
         self._early_stopping = None
+        self.restore_best_weights()
 
     def __get_lstm_dropout(self, lstm_layers: int, lstm_dropout) -> List[float]:
         if isinstance(lstm_dropout, tuple): return list(lstm_dropout)
@@ -60,6 +63,9 @@ class ModelParams(object):
     def early_stopping(self, patience: int=5, restore_best_weights: bool=True):
         self._early_stopping = EarlyStopping(monitor="val_loss", min_delta=0, patience=patience,
                                              verbose=1, restore_best_weights=restore_best_weights)
+
+    def restore_best_weights(self):
+        self._restore_best = RestoreWeights(verbose=1)
 
     def reduce_lr_on_plateau_scheduler(self, factor=0.5, patience=3, min_lr=0.0002):
         self._scheduler = ReduceLROnPlateau(monitor="val_loss", factor=factor, patience=patience,
@@ -73,16 +79,25 @@ class ModelParams(object):
                                         cycle_length=cycle_length, mult_factor=mult_factor)
         self._scheduler_needs_validation = False
 
+    def set_optimizer(self, optimizer):
+        self.optimizer = optimizer
+
     def get_callbacks(self, validated: bool) -> List[Callback]:
         if not validated:
             logger.warning("No validation dataset is provided, some callbacks or schedulers may not be available")
         callbacks = []
-        if self._early_stopping and validated: callbacks.append(self._early_stopping)
         if self._scheduler:
             if self._scheduler_needs_validation:
                 if validated: callbacks.append(self._scheduler)
             else: callbacks.append(self._scheduler)
+        if self._early_stopping and validated: callbacks.append(self._early_stopping)
+        if self._restore_best and validated: callbacks.append(self._restore_best)
         return callbacks
+
+    def clear_callbacks(self):
+        self._scheduler = None
+        self._early_stopping = None
+        self._restore_best = None
 
 
 class TaggingPrediction(object):
@@ -229,7 +244,8 @@ class TaggingModel(object):
 
     def __optimizer(self):
         lr = self.params.learning_rate
-        return Nadam(lr=lr) if not self.params.opt_clipnorm else Nadam(clipnorm=1., lr=lr)
+        opt = self.params.optimizer
+        return opt(lr=lr) if not self.params.opt_clipnorm else opt(clipnorm=1., lr=lr)
 
     def __run_opts(self):
         return tf.RunOptions(report_tensor_allocations_upon_oom=True)
@@ -238,6 +254,7 @@ class TaggingModel(object):
         x, y = self.__transform_dataset(train)
         validation_data = self.__transform_dataset(valid) if valid is not None else None
         callbacks = self.params.get_callbacks(valid is not None)
+        self.params.clear_callbacks()
         self.model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose, callbacks=callbacks)
 
     def __transform_dataset(self, dataset: DataSet) -> Tuple[List[np.ndarray], List[np.ndarray]]:
