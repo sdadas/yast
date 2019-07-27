@@ -1,4 +1,5 @@
 import collections
+import logging
 import os
 import pickle
 import unittest
@@ -7,7 +8,7 @@ from typing import Iterable, Dict, List, Tuple, Union, Callable, TextIO
 
 import numpy as np
 import tensorflow as tf
-from keras.callbacks import ReduceLROnPlateau, EarlyStopping
+from keras.callbacks import ReduceLROnPlateau, EarlyStopping, Callback
 from sklearn import metrics, preprocessing
 from keras import Model, Input
 from keras.engine import Layer
@@ -19,6 +20,7 @@ from keras.optimizers import Nadam
 from keras_contrib.layers import CRF
 
 from bilm.elmo_keras import WeightElmo
+from callback.sgdr import SGDRScheduler
 from dataset import DataSet, DataSetFeature
 from feature.base import OneHotFeature, Feature, DocOneHotFeature
 from feature.chars import CharsFeature, CharCNNFeature
@@ -27,6 +29,8 @@ from layers.attention import Attention
 from metrics.conlleval import ConllevalOptions, EvalCounts, evaluate, get_metrics, report, ConllevalMetrics
 from utils.files import ProjectPath
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ModelParams(object):
 
@@ -44,11 +48,41 @@ class ModelParams(object):
         self.otag = otag
         self.verbose = verbose
         self.learning_rate = learning_rate
+        self._scheduler = None
+        self._scheduler_needs_validation = False
+        self._early_stopping = None
 
     def __get_lstm_dropout(self, lstm_layers: int, lstm_dropout) -> List[float]:
         if isinstance(lstm_dropout, tuple): return list(lstm_dropout)
         elif isinstance(lstm_dropout, list): return lstm_dropout
         else: return [lstm_dropout] * lstm_layers
+
+    def early_stopping(self, patience: int=5, restore_best_weights: bool=True):
+        self._early_stopping = EarlyStopping(monitor="val_loss", min_delta=0, patience=patience,
+                                             verbose=1, restore_best_weights=restore_best_weights)
+
+    def reduce_lr_on_plateau_scheduler(self, factor=0.5, patience=3, min_lr=0.0002):
+        self._scheduler = ReduceLROnPlateau(monitor="val_loss", factor=factor, patience=patience,
+                                            verbose=1, min_lr=min_lr)
+        self._scheduler_needs_validation = True
+
+    def sgd_with_restarts_scheduler(self, train: DataSet, batch_size: int, max_lr=0.05, min_lr=0.0002,
+                                    cycle_length=3, mult_factor=2):
+        steps_per_epoch = np.ceil(len(train) / batch_size)
+        self._scheduler = SGDRScheduler(max_lr=max_lr, min_lr=min_lr, steps_per_epoch=steps_per_epoch,
+                                        cycle_length=cycle_length, mult_factor=mult_factor)
+        self._scheduler_needs_validation = False
+
+    def get_callbacks(self, validated: bool) -> List[Callback]:
+        if not validated:
+            logger.warning("No validation dataset is provided, some callbacks or schedulers may not be available")
+        callbacks = []
+        if self._early_stopping and validated: callbacks.append(self._early_stopping)
+        if self._scheduler:
+            if self._scheduler_needs_validation:
+                if validated: callbacks.append(self._scheduler)
+            else: callbacks.append(self._scheduler)
+        return callbacks
 
 
 class TaggingPrediction(object):
@@ -200,17 +234,11 @@ class TaggingModel(object):
     def __run_opts(self):
         return tf.RunOptions(report_tensor_allocations_upon_oom=True)
 
-    def train(self, train: DataSet, valid: DataSet = None, epochs: int=50, batch_size: int=32, verbose: int=1, reducelr: bool=False):
+    def train(self, train: DataSet, valid: DataSet = None, epochs: int=50, batch_size: int=32, verbose: int=1):
         x, y = self.__transform_dataset(train)
-        val_data = None
-        callbacks = []
-        if valid is not None:
-            val_data = self.__transform_dataset(valid)
-            if reducelr:
-                rlr = ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=3, verbose=verbose, min_lr=0.0002)
-                stop = EarlyStopping(monitor='val_loss', min_delta=0, patience=6, verbose=0, restore_best_weights=True)
-                callbacks.extend([rlr, stop])
-        self.model.fit(x=x, y=y, validation_data=val_data, batch_size=batch_size, epochs=epochs, verbose=verbose, callbacks=callbacks)
+        validation_data = self.__transform_dataset(valid) if valid is not None else None
+        callbacks = self.params.get_callbacks(valid is not None)
+        self.model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose, callbacks=callbacks)
 
     def __transform_dataset(self, dataset: DataSet) -> Tuple[List[np.ndarray], List[np.ndarray]]:
         target_feature = OneHotFeature(self.target_name, dataset.labels(self.target_name), input3d=True)
