@@ -254,7 +254,6 @@ class TaggingModel(object):
         x, y = self.__transform_dataset(train)
         validation_data = self.__transform_dataset(valid) if valid is not None else None
         callbacks = self.params.get_callbacks(valid is not None)
-        callbacks.append(Metrics())
         self.params.clear_callbacks()
         self.model.fit(x=x, y=y, validation_data=validation_data, batch_size=batch_size, epochs=epochs, verbose=verbose, callbacks=callbacks)
 
