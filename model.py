@@ -233,8 +233,8 @@ class TaggingModel(object):
     def __sequence_output(self, input: Layer) -> Layer:
         layer_name = 'sequence_output'
         if self.params.use_crf:
-            learn_mode = 'join' if self.doc_target_name is None else 'marginal'
-            test_mode = 'viterbi' if self.doc_target_name is None else 'marginal'
+            learn_mode = "marginal" #'join' if self.doc_target_name is None else 'marginal'
+            test_mode = "marginal" #'viterbi' if self.doc_target_name is None else 'marginal'
             crf = CRF(len(self.labels), learn_mode=learn_mode, test_mode=test_mode, sparse_target=True, name=layer_name)
             res = crf(input)
             res.loss_function = crf.loss_function
